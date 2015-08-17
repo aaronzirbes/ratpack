@@ -20,12 +20,8 @@ import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.ApplicationPlugin
-import org.gradle.api.plugins.ApplicationPluginConvention
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.tasks.JavaExec
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.api.tasks.application.CreateStartScripts
 import org.gradle.plugins.ide.idea.IdeaPlugin
 
 class RatpackPlugin implements Plugin<Project> {
@@ -43,10 +39,6 @@ class RatpackPlugin implements Plugin<Project> {
     project.plugins.apply(ApplicationPlugin)
     project.plugins.apply(RatpackBasePlugin)
 
-    project.configurations { springloaded }
-
-    def ratpackApp = new SpringloadedUtil(project, project.configurations['springloaded'])
-
     RatpackExtension ratpackExtension = project.extensions.findByType(RatpackExtension)
 
     project.dependencies {
@@ -58,43 +50,12 @@ class RatpackPlugin implements Plugin<Project> {
     configureRun.doFirst {
       JavaExec runTask = project.tasks.findByName("run") as JavaExec
       runTask.with {
-        classpath ratpackApp.springloadedClasspath
-        jvmArgs ratpackApp.springloadedJvmArgs
         systemProperty "ratpack.development", true
-        systemProperty "ratpack.baseDir.override", ratpackExtension.baseDir.absolutePath
       }
     }
 
     JavaExec run = project.run {
       dependsOn configureRun
-    }
-
-    SourceSetContainer sourceSets = project.sourceSets
-    def mainSourceSet = sourceSets[SourceSet.MAIN_SOURCE_SET_NAME]
-    mainSourceSet.resources.srcDir {
-      ratpackExtension.baseDir
-    }
-
-    def prepareBaseDirTask = project.tasks.create("prepareBaseDir")
-    prepareBaseDirTask.with {
-      group = "Ratpack"
-      description = "Lifecycle task for all tasks that contribute content to Ratpack base directory (default: 'src/ratpack') (add dependencies to this task)"
-    }
-
-    def appPluginConvention = project.getConvention().getPlugin(ApplicationPluginConvention)
-    appPluginConvention.applicationDistribution.from({ ratpackExtension.baseDir }) {
-      into "app"
-    }
-
-    appPluginConvention.applicationDistribution.from prepareBaseDirTask.taskDependencies
-    project.tasks.getByName("processResources").dependsOn prepareBaseDirTask
-
-    CreateStartScripts startScripts = project.startScripts
-    startScripts.with {
-      doLast {
-        unixScript.text = unixScript.text.replaceAll('CLASSPATH=.+\n', '$0cd "\\$APP_HOME/app"\n')
-        windowsScript.text = windowsScript.text.replaceAll('CLASSPATH=.+\r\n', '$0cd "%APP_HOME%/app"\r\n')
-      }
     }
 
     project.plugins.withType(IdeaPlugin) {

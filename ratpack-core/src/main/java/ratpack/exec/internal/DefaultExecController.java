@@ -46,6 +46,7 @@ public class DefaultExecController implements ExecControllerInternal {
   private final ExecutorService blockingExecutor;
   private final EventLoopGroup eventLoopGroup;
   private final int numThreads;
+  private final ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 
   private ImmutableList<? extends ExecInterceptor> interceptors = ImmutableList.of();
 
@@ -67,6 +68,12 @@ public class DefaultExecController implements ExecControllerInternal {
   public void close() {
     eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.SECONDS);
     blockingExecutor.shutdown();
+    try {
+      eventLoopGroup.awaitTermination(10, TimeUnit.MINUTES);
+      blockingExecutor.awaitTermination(10, TimeUnit.MINUTES);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   @Override
@@ -96,6 +103,7 @@ public class DefaultExecController implements ExecControllerInternal {
     public Thread newThread(final Runnable r) {
       return super.newThread(() -> {
         ThreadBinding.bind(compute, DefaultExecController.this);
+        Thread.currentThread().setContextClassLoader(contextClassLoader);
         r.run();
       });
     }
